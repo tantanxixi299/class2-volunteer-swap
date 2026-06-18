@@ -339,9 +339,14 @@ select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3p
         <span style="color:var(--red);font-weight:600;">备注缺勤（所有日期均无法执勤）</span>
       </label>
     </div>
-    <button class="btn btn-primary" id="findMatchBtn" onclick="findMatches()" style="margin-top:12px;" disabled>
-      🔍 查找可互换家长
-    </button>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-outline" id="submitDatesBtn" onclick="submitDates()" disabled>
+        ✅ 确认提交
+      </button>
+      <button class="btn btn-primary" id="findMatchBtn" onclick="findMatches()" disabled>
+        🔍 查找可互换家长
+      </button>
+    </div>
   </div>
   
   <div id="matchResults" class="hidden" style="margin-top:16px;">
@@ -435,9 +440,11 @@ function onParentSelect() {
   const section = document.getElementById('dateCheckSection');
   const matchResults = document.getElementById('matchResults');
   const findBtn = document.getElementById('findMatchBtn');
+  const submitBtn = document.getElementById('submitDatesBtn');
   const absentCb = document.getElementById('absentNote');
   
   matchResults.classList.add('hidden');
+  submittedKey = null;
   
   if (!key) {
     section.classList.add('hidden');
@@ -447,7 +454,7 @@ function onParentSelect() {
   section.classList.remove('hidden');
   absentCb.checked = absentParents.has(key);
   buildDateCheckboxes(key);
-  updateFindBtn();
+  updateSubmitBtn();
 }
 
 function buildDateCheckboxes(parentKey) {
@@ -471,7 +478,7 @@ function buildDateCheckboxes(parentKey) {
     cb.checked = isAllUnavailable || unavailable.includes(d);
     cb.addEventListener('change', () => {
       label.classList.toggle('checked', cb.checked);
-      updateFindBtn();
+      updateSubmitBtn();
     });
     
     label.appendChild(cb);
@@ -485,48 +492,73 @@ function onAbsentToggle() {
   const parentKey = document.getElementById('parentSelect').value;
   
   if (checked) {
-    // 全选所有日期
     const cbs = document.querySelectorAll('#dateCheckboxes input');
     cbs.forEach(cb => { cb.checked = true; cb.parentElement.classList.add('checked'); });
   }
-  updateFindBtn();
+  updateSubmitBtn();
 }
 
-function updateFindBtn() {
+function updateSubmitBtn() {
   const parentKey = document.getElementById('parentSelect').value;
   const absentCb = document.getElementById('absentNote').checked;
   const cbs = document.querySelectorAll('#dateCheckboxes input:checked');
-  const btn = document.getElementById('findMatchBtn');
+  const submitBtn = document.getElementById('submitDatesBtn');
+  const findBtn = document.getElementById('findMatchBtn');
   
-  if (!parentKey) { btn.disabled = true; return; }
-  if (absentCb) { btn.disabled = false; return; }
-  btn.disabled = cbs.length === 0;
+  if (!parentKey) { submitBtn.disabled = true; findBtn.disabled = true; return; }
+  if (absentCb) { submitBtn.disabled = false; findBtn.disabled = true; return; }
+  submitBtn.disabled = cbs.length === 0;
+  findBtn.disabled = true;
 }
 
-// ==================== MATCHING ====================
+// ==================== SUBMIT & MATCHING ====================
+let submittedKey = null; // 已提交的家长
+
+function submitDates() {
+  const parentKey = document.getElementById('parentSelect').value;
+  if (!parentKey) return;
+  
+  const absentCb = document.getElementById('absentNote').checked;
+  const cbs = document.querySelectorAll('#dateCheckboxes input:checked');
+  const dates = Array.from(cbs).map(cb => cb.value);
+  
+  if (!absentCb && dates.length === 0) {
+    showToast('请至少选择一个无法执勤日期', 'error');
+    return;
+  }
+  
+  const unavailable = absentCb ? 'ALL' : dates;
+  unavailableMap[parentKey] = unavailable;
+  if (absentCb) absentParents.add(parentKey);
+  else absentParents.delete(parentKey);
+  
+  submittedKey = parentKey;
+  saveState();
+  renderSchedule();
+  
+  const dateStr = absentCb ? '全部日期' : dates.map(formatDateShort).join('、');
+  showToast(`✅ 已提交：${dateStr} 无法执勤`);
+  
+  document.getElementById('findMatchBtn').disabled = false;
+}
+
 function findMatches() {
   const parentKey = document.getElementById('parentSelect').value;
-  const absentCb = document.getElementById('absentNote').checked;
   const matchResults = document.getElementById('matchResults');
   const matchList = document.getElementById('matchList');
   
   if (!parentKey) return;
   
-  let unavailable;
-  if (absentCb) {
-    unavailable = 'ALL';
-  } else {
-    const cbs = document.querySelectorAll('#dateCheckboxes input:checked');
-    unavailable = Array.from(cbs).map(cb => cb.value);
+  // 如果还没提交，自动提交
+  if (submittedKey !== parentKey) {
+    submitDates();
   }
   
-  if (unavailable !== 'ALL' && unavailable.length === 0) return;
-  
-  // 暂时保存选择
-  unavailableMap[parentKey] = unavailable;
-  if (absentCb) absentParents.add(parentKey);
-  else absentParents.delete(parentKey);
-  saveState();
+  const unavailable = unavailableMap[parentKey];
+  if (!unavailable) {
+    showToast('请先确认提交无法执勤日期', 'error');
+    return;
+  }
   
   const matches = computeMatches(parentKey, unavailable);
   
@@ -882,6 +914,7 @@ function toggleAbsent(key) {
   const selKey = document.getElementById('parentSelect').value;
   if (selKey === key) {
     document.getElementById('absentNote').checked = absentParents.has(key);
+    updateSubmitBtn();
   }
 }
 
