@@ -752,7 +752,6 @@ function confirmSwap() {
 }
 
 function swapParentDates(keyA, keyB) {
-  // 在parentList中交换两个家长的日期
   const list = SCHEDULE_DATA.parentList;
   let a = null, b = null;
   
@@ -763,15 +762,19 @@ function swapParentDates(keyA, keyB) {
   }
   
   if (a && b) {
+    // 交换日期
     const tempDate = a.originalDate;
     a.originalDate = b.originalDate;
     b.originalDate = tempDate;
+    // 交换组长身份：谁换到组长日期谁就当组长
+    const tempLeader = a.isLeader;
+    a.isLeader = b.isLeader;
+    b.isLeader = tempLeader;
   }
 }
 
 // ==================== RENDER ====================
 function renderSchedule() {
-  // 构建当前日期→成员映射
   const dateMembers = {};
   SCHEDULE_DATA.allDates.forEach(d => { dateMembers[d] = []; });
   
@@ -782,7 +785,11 @@ function renderSchedule() {
     }
   }
   
-  // 计算最大行数
+  // 每个日期内组长排第一
+  for (const d of SCHEDULE_DATA.allDates) {
+    dateMembers[d].sort((a, b) => (b.isLeader ? 1 : 0) - (a.isLeader ? 1 : 0));
+  }
+  
   let maxRows = 0;
   SCHEDULE_DATA.allDates.forEach(d => {
     maxRows = Math.max(maxRows, dateMembers[d].length);
