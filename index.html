@@ -1354,13 +1354,19 @@ function undoSwap(index) {
   showToast('已撤销调换');
 }
 
-function resetAll() {
-  if (swapHistory.length === 0 && Object.keys(unavailableMap).length === 0 && absentParents.size === 0) {
+async function resetAll() {
+  if (swapHistory.length === 0 && Object.keys(unavailableMap).length === 0 && absentParents.size === 0 && cloudRequests.length === 0) {
     showToast('没有需要重置的数据');
     return;
   }
   
-  if (!confirm('确定要重置全部调换记录、不可用日期和缺勤标记吗？此操作不可恢复。')) return;
+  if (!confirm('确定要重置全部调换记录、不可用日期、缺勤标记和云端调换请求吗？此操作不可恢复。')) return;
+  
+  // 关闭所有云端调换请求
+  showToast('⏳ 正在清理云端数据...');
+  for (const r of cloudRequests) {
+    await closeCloudRequest(r.issueNumber);
+  }
   
   localStorage.removeItem('schedule_swap_state');
   location.reload();
