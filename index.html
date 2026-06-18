@@ -1088,10 +1088,20 @@ function confirmSwap() {
   swapCount[fromKey] = (swapCount[fromKey] || 0) + 1;
   swapCount[toKey] = (swapCount[toKey] || 0) + 1;
   
+  // 关闭云端调换请求
+  cloudRequests.forEach(r => {
+    if (r.parentKey === fromKey || r.parentKey === toKey) {
+      closeCloudRequest(r.issueNumber);
+    }
+  });
+  // 从本地缓存中移除已调换的请求
+  cloudRequests = cloudRequests.filter(r => r.parentKey !== fromKey && r.parentKey !== toKey);
+  
   saveState();
   closeConfirm();
   renderSchedule();
   renderHistory();
+  renderCloudRequests();
   document.getElementById('matchResults').classList.add('hidden');
   
   showToast('✅ 调换成功！排班表已更新');
