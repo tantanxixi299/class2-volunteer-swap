@@ -425,8 +425,15 @@ select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3p
           <label>移至日期</label>
           <select id="manualTargetDate"></select>
         </div>
+        <div class="form-group" id="manualTypeGroup" style="display:none;">
+          <label>操作类型</label>
+          <select id="manualType">
+            <option value="makeup">补勤（排末位+标签）</option>
+            <option value="move">移位（正常排位）</option>
+          </select>
+        </div>
         <button class="btn btn-danger" id="manualMoveBtn" onclick="manualMove()" disabled style="align-self:flex-end;">
-          ➡ 确认移位
+          ➡ 确认
         </button>
       </div>
     </div>
@@ -637,20 +644,23 @@ async function refreshCloud() {
 function onManualParentSelect() {
   const key = document.getElementById('manualParentSelect').value;
   const targetGroup = document.getElementById('manualTargetGroup');
+  const typeGroup = document.getElementById('manualTypeGroup');
   const targetSel = document.getElementById('manualTargetDate');
   const moveBtn = document.getElementById('manualMoveBtn');
   
   if (!key) {
     targetGroup.style.display = 'none';
+    typeGroup.style.display = 'none';
     moveBtn.disabled = true;
     return;
   }
   
   const parent = findParent(key);
   targetGroup.style.display = 'flex';
+  typeGroup.style.display = 'flex';
   moveBtn.disabled = false;
   
-  // 填充目标日期，排除当前日期
+  // 填充目标日期
   targetSel.innerHTML = '';
   SCHEDULE_DATA.allDates.forEach(d => {
     const opt = document.createElement('option');
@@ -671,6 +681,7 @@ function onManualParentSelect() {
 function manualMove() {
   const key = document.getElementById('manualParentSelect').value;
   const targetDate = document.getElementById('manualTargetDate').value;
+  const moveType = document.getElementById('manualType').value;
   if (!key || !targetDate) return;
   
   const parent = findParent(key);
@@ -680,11 +691,14 @@ function manualMove() {
     return;
   }
   
+  const typeLabel = moveType === 'makeup' ? '补勤' : '移位';
+  
   // 确认弹窗
-  pendingManualMove = { key, oldDate, targetDate };
+  pendingManualMove = { key, oldDate, targetDate, moveType };
   document.getElementById('confirmDetail').innerHTML = `
     <div style="text-align:center;">
       <div style="font-weight:700;font-size:15px;">${parent.student}(${parent.parent})</div>
+      <div style="margin-top:4px;font-size:13px;color:var(--red);font-weight:600;">【${typeLabel}】</div>
       <div style="margin-top:8px;">
         <span style="color:var(--text-secondary);">${formatDateShort(oldDate)}</span>
         <span style="margin:0 8px;color:var(--red);font-size:18px;">➡</span>
@@ -1030,20 +1044,21 @@ function closeConfirm() {
 function confirmSwap() {
   // 处理手动移位
   if (pendingManualMove && !pendingSwap) {
-    const { key, oldDate, targetDate } = pendingManualMove;
+    const { key, oldDate, targetDate, moveType } = pendingManualMove;
     const parent = findParent(key);
     parent.originalDate = targetDate;
-    parent.isMakeup = true; // 标记为补勤位
+    parent.isMakeup = (moveType === 'makeup');
     
-    // 如果之前标记缺勤，补勤后自动取消缺勤
+    // 如果之前标记缺勤，补勤/移位后自动取消缺勤
     if (absentParents.has(key)) {
       absentParents.delete(key);
       if (unavailableMap[key] === 'ALL') delete unavailableMap[key];
     }
     
+    const typeLabel = moveType === 'makeup' ? '【补勤】' : '【移位】';
     swapHistory.push({
       from: key,
-      to: '【手动移位】',
+      to: typeLabel,
       dateFrom: oldDate,
       dateTo: targetDate,
       timestamp: new Date().toLocaleString('zh-CN')
@@ -1328,7 +1343,9 @@ function undoSwap(index) {
   
   const h = swapHistory[index];
   
-  if (h.to === '【手动移位】') {
+  const isManual = h.to === '【补勤】' || h.to === '【移位】';
+  
+  if (isManual) {
     // 手动移位撤销：把家长移回原日期，清除补勤标记
     const parent = findParent(h.from);
     if (parent) {
@@ -1342,7 +1359,7 @@ function undoSwap(index) {
   
   // 减少计数
   swapCount[h.from] = Math.max(0, (swapCount[h.from] || 1) - 1);
-  if (h.to !== '【手动移位】') {
+  if (!isManual) {
     swapCount[h.to] = Math.max(0, (swapCount[h.to] || 1) - 1);
   }
   
