@@ -515,7 +515,10 @@ async function submitToCloud(parentKey, unavailableDates, isAbsent) {
 async function loadCloudRequests() {
   try {
     const resp = await fetch(`${GH_API}?labels=swap-request&state=open&per_page=100&t=${Date.now()}`, {
-      headers: { 'Accept': 'application/vnd.github+json' }
+      headers: {
+        'Authorization': `Bearer ${GH_TOKEN}`,
+        'Accept': 'application/vnd.github+json'
+      }
     });
     if (!resp.ok) throw new Error(`拉取失败: ${resp.status}`);
     const issues = await resp.json();
