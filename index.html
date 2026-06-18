@@ -375,6 +375,25 @@ select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3p
   </div>
 </div>
 
+<!-- Schedule Table -->
+<div class="card">
+  <div class="card-title">📋 排班表（调换后最终结果）</div>
+  <div class="schedule-wrapper">
+    <table class="schedule-table" id="scheduleTable">
+      <thead id="scheduleHead"></thead>
+      <tbody id="scheduleBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- History -->
+<div class="card">
+  <div class="card-title">📝 调换记录</div>
+  <div class="history-list" id="historyList">
+    <div class="history-empty">暂无调换记录</div>
+  </div>
+</div>
+
 <!-- 家委手动调整 -->
 <div class="card">
   <div class="manual-toggle" onclick="toggleManualPanel()" id="manualToggle">
@@ -402,25 +421,6 @@ select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3p
         </button>
       </div>
     </div>
-  </div>
-</div>
-
-<!-- Schedule Table -->
-<div class="card">
-  <div class="card-title">📋 排班表（调换后最终结果）</div>
-  <div class="schedule-wrapper">
-    <table class="schedule-table" id="scheduleTable">
-      <thead id="scheduleHead"></thead>
-      <tbody id="scheduleBody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- History -->
-<div class="card">
-  <div class="card-title">📝 调换记录</div>
-  <div class="history-list" id="historyList">
-    <div class="history-empty">暂无调换记录</div>
   </div>
 </div>
 
