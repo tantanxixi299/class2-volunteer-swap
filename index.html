@@ -215,8 +215,8 @@ select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3p
   display: inline-block;
   width: 14px; height: 14px;
   border-radius: 50%;
-  border: 1.5px solid #ccc;
-  background: white;
+  border: 1.5px solid var(--primary);
+  background: var(--primary-light);
   cursor: pointer;
   vertical-align: middle;
   margin-left: 2px;
@@ -639,12 +639,17 @@ function onAbsentToggle() {
   const parentKey = document.getElementById('parentSelect').value;
   
   if (checked) {
+    absentParents.add(parentKey);
+    unavailableMap[parentKey] = 'ALL';
     const cbs = document.querySelectorAll('#dateCheckboxes input');
     cbs.forEach(cb => { cb.checked = true; cb.parentElement.classList.add('checked'); });
   } else {
-    // 取消缺勤：重新构建复选框，恢复到只有原始日期被勾选的状态
+    absentParents.delete(parentKey);
+    if (unavailableMap[parentKey] === 'ALL') delete unavailableMap[parentKey];
     buildDateCheckboxes(parentKey);
   }
+  saveState();
+  renderSchedule();
   updateSubmitBtn();
 }
 
