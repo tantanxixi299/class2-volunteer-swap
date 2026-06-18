@@ -311,7 +311,10 @@ select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3p
     <span class="legend-item"><span class="legend-dot green"></span> 调换1次</span>
     <span class="legend-item"><span class="legend-dot yellow"></span> 调换2次</span>
     <span class="legend-item"><span class="legend-dot red"></span> 缺勤（点击 ✕ 标记）</span>
-    <span class="legend-item" style="margin-left:auto;"><button class="btn btn-outline btn-sm" onclick="resetAll()">🔄 重置全部调换</button></span>
+    <span class="legend-item" style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+      <span style="font-size:11px;color:var(--red);font-weight:600;">家委操作 →</span>
+      <button class="btn btn-outline btn-sm" onclick="resetAll()">🔄 重置全部调换</button>
+    </span>
   </div>
 </div>
 
