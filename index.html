@@ -867,16 +867,18 @@ function selectParentFromCell(key) {
 function toggleAbsent(key) {
   if (absentParents.has(key)) {
     absentParents.delete(key);
+    // 同时清除全部不可用标记
+    if (unavailableMap[key] === 'ALL') {
+      delete unavailableMap[key];
+    }
     showToast('已取消缺勤标记');
   } else {
     absentParents.add(key);
-    // 同时全选不可用日期
     unavailableMap[key] = 'ALL';
     showToast('🔴 已标记为缺勤');
   }
   saveState();
   renderSchedule();
-  // 同步更新调换面板
   const selKey = document.getElementById('parentSelect').value;
   if (selKey === key) {
     document.getElementById('absentNote').checked = absentParents.has(key);
