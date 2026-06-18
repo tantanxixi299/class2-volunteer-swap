@@ -201,20 +201,6 @@ select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3p
 .swap-1 { color: var(--green) !important; font-weight: 700; }
 .swap-2 { color: var(--yellow) !important; font-weight: 700; }
 .swap-all-unavailable { color: var(--red) !important; font-weight: 700; }
-.cell.highlight-original {
-  background: #fef2f2 !important;
-  border: 2px solid var(--red) !important;
-}
-.cell .original-badge {
-  display: inline-block;
-  font-size: 10px;
-  background: var(--red);
-  color: white;
-  padding: 1px 5px;
-  border-radius: 3px;
-  margin-left: 3px;
-  font-weight: 400;
-}
 .absent-mark-btn {
   display: inline-block;
   width: 14px; height: 14px;
@@ -426,13 +412,6 @@ let unavailableMap = {};    // {parentKey: [date1, date2, ...] or 'ALL'}
 let absentParents = new Set(); // 备注缺勤的家长
 let swapCount = {};         // {parentKey: count}
 let pendingSwap = null;
-let selectedParentKey = null; // 当前选中的家长
-
-// 记录每个家长最初分配的日期（永不改变，用于高亮"需要换出的日期"）
-const originalDateMap = {};
-SCHEDULE_DATA.parentList.forEach(p => {
-  originalDateMap[makeKey(p)] = p.originalDate;
-});
 
 // ==================== INIT ====================
 function init() {
@@ -466,12 +445,9 @@ function onParentSelect() {
   
   matchResults.classList.add('hidden');
   submittedKey = null;
-  selectedParentKey = key;
   
   if (!key) {
     section.classList.add('hidden');
-    selectedParentKey = null;
-    renderSchedule();
     return;
   }
   
@@ -479,7 +455,6 @@ function onParentSelect() {
   absentCb.checked = absentParents.has(key);
   buildDateCheckboxes(key);
   updateSubmitBtn();
-  renderSchedule(); // 重新渲染以高亮原始日期
 }
 
 function buildDateCheckboxes(parentKey) {
@@ -787,9 +762,14 @@ function swapParentDates(keyA, keyB) {
   }
   
   if (a && b) {
+    // 交换日期
     const tempDate = a.originalDate;
     a.originalDate = b.originalDate;
     b.originalDate = tempDate;
+    // 交换组长身份：谁换到组长日期谁就当组长
+    const tempLeader = a.isLeader;
+    a.isLeader = b.isLeader;
+    b.isLeader = tempLeader;
   }
 }
 
@@ -805,13 +785,9 @@ function renderSchedule() {
     }
   }
   
-  // 每个日期内：组长排第一（根据原始dateSchedule判断）
+  // 每个日期内组长排第一
   for (const d of SCHEDULE_DATA.allDates) {
-    dateMembers[d].sort((a, b) => {
-      const aIsLeader = isOriginalLeader(makeKey(a), d);
-      const bIsLeader = isOriginalLeader(makeKey(b), d);
-      return (bIsLeader ? 1 : 0) - (aIsLeader ? 1 : 0);
-    });
+    dateMembers[d].sort((a, b) => (b.isLeader ? 1 : 0) - (a.isLeader ? 1 : 0));
   }
   
   let maxRows = 0;
@@ -871,20 +847,12 @@ function renderSchedule() {
           colorClass = 'swap-1';
         }
         
-        // 高亮选中家长的原始日期格子
-        if (selectedParentKey && selectedParentKey === key && d === originalDateMap[key]) {
-          td.classList.add('highlight-original');
-        }
-        
         const absentActive = isAbsent ? ' active' : '';
-        const isLeaderHere = isOriginalLeader(key, d);
-        const originalTag = (selectedParentKey === key && d === originalDateMap[key]) ? '<span class="original-badge">原日期</span>' : '';
         
         td.innerHTML = `
           <div class="${colorClass}">
             ${m.student}
-            ${isLeaderHere ? '<span class="leader-badge">组长</span>' : ''}
-            ${originalTag}
+            ${m.isLeader ? '<span class="leader-badge">组长</span>' : ''}
             <span class="absent-mark-btn${absentActive}" data-key="${escapeHtml(key)}" title="标记缺勤" onclick="event.stopPropagation();toggleAbsent('${escapeHtml(key)}')">✕</span>
           </div>
           <div class="parent-name ${colorClass}">${m.parent}${m.relation ? '·'+m.relation : ''}</div>
@@ -960,16 +928,6 @@ function toggleAbsent(key) {
 // ==================== HELPERS ====================
 function escapeHtml(str) {
   return str.replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function isOriginalLeader(key, date) {
-  // 查找原始dateSchedule中该日期下该家长是否为组长
-  const ds = SCHEDULE_DATA.dateSchedule[date];
-  if (!ds) return false;
-  for (const m of ds.members) {
-    if (makeKey(m) === key) return m.isLeader;
-  }
-  return false;
 }
 
 function makeKey(parent) {
