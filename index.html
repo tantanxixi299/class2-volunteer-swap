@@ -358,6 +358,29 @@ select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3p
   </div>
 </div>
 
+<!-- 家委手动调整 -->
+<div class="card" style="border:2px dashed var(--primary);">
+  <div class="card-title" style="color:var(--red);">🛠️ 家委手动调整（补勤/移位）</div>
+  <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
+    家委专用：将缺勤家长直接移到后面的日期补勤，或做任意手动调整。
+  </p>
+  <div class="form-row">
+    <div class="form-group">
+      <label>选择家长</label>
+      <select id="manualParentSelect" onchange="onManualParentSelect()">
+        <option value="">-- 请选择 --</option>
+      </select>
+    </div>
+    <div class="form-group" id="manualTargetGroup" style="display:none;">
+      <label>移至日期</label>
+      <select id="manualTargetDate"></select>
+    </div>
+    <button class="btn btn-danger" id="manualMoveBtn" onclick="manualMove()" disabled style="align-self:flex-end;">
+      ➡ 确认移位
+    </button>
+  </div>
+</div>
+
 <!-- Schedule Table -->
 <div class="card">
   <div class="card-title">📋 排班表（调换后最终结果）</div>
@@ -420,9 +443,88 @@ let pendingSwap = null;
 function init() {
   loadState();
   buildParentSelect();
+  buildManualSelect();
   renderSchedule();
   renderHistory();
 }
+
+// 家委手动调整：填充家长下拉框
+function buildManualSelect() {
+  const sel = document.getElementById('manualParentSelect');
+  const sorted = [...SCHEDULE_DATA.parentList].sort((a,b) => 
+    a.student.localeCompare(b.student, 'zh')
+  );
+  sorted.forEach(p => {
+    const opt = document.createElement('option');
+    const key = makeKey(p);
+    opt.value = key;
+    opt.textContent = `${p.student}(${p.parent})`;
+    sel.appendChild(opt);
+  });
+}
+
+function onManualParentSelect() {
+  const key = document.getElementById('manualParentSelect').value;
+  const targetGroup = document.getElementById('manualTargetGroup');
+  const targetSel = document.getElementById('manualTargetDate');
+  const moveBtn = document.getElementById('manualMoveBtn');
+  
+  if (!key) {
+    targetGroup.style.display = 'none';
+    moveBtn.disabled = true;
+    return;
+  }
+  
+  const parent = findParent(key);
+  targetGroup.style.display = 'flex';
+  moveBtn.disabled = false;
+  
+  // 填充目标日期，排除当前日期
+  targetSel.innerHTML = '';
+  SCHEDULE_DATA.allDates.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d;
+    opt.textContent = `${formatDateShort(d)} ${SCHEDULE_DATA.weekdayMap[d]}`;
+    if (d === parent.originalDate) {
+      opt.textContent += '（当前）';
+    }
+    targetSel.appendChild(opt);
+  });
+  // 默认选中当前日期的下一个
+  const idx = SCHEDULE_DATA.allDates.indexOf(parent.originalDate);
+  if (idx >= 0 && idx < SCHEDULE_DATA.allDates.length - 1) {
+    targetSel.value = SCHEDULE_DATA.allDates[idx + 1];
+  }
+}
+
+function manualMove() {
+  const key = document.getElementById('manualParentSelect').value;
+  const targetDate = document.getElementById('manualTargetDate').value;
+  if (!key || !targetDate) return;
+  
+  const parent = findParent(key);
+  const oldDate = parent.originalDate;
+  if (oldDate === targetDate) {
+    showToast('目标日期与当前日期相同', 'error');
+    return;
+  }
+  
+  // 确认弹窗
+  pendingManualMove = { key, oldDate, targetDate };
+  document.getElementById('confirmDetail').innerHTML = `
+    <div style="text-align:center;">
+      <div style="font-weight:700;font-size:15px;">${parent.student}(${parent.parent})</div>
+      <div style="margin-top:8px;">
+        <span style="color:var(--text-secondary);">${formatDateShort(oldDate)}</span>
+        <span style="margin:0 8px;color:var(--red);font-size:18px;">➡</span>
+        <span style="color:var(--primary);font-weight:700;">${formatDateShort(targetDate)} ${SCHEDULE_DATA.weekdayMap[targetDate]}</span>
+      </div>
+    </div>
+  `;
+  document.getElementById('confirmModal').classList.remove('hidden');
+}
+
+let pendingManualMove = null;
 
 function buildParentSelect() {
   const sel = document.getElementById('parentSelect');
@@ -731,9 +833,42 @@ function requestSwap(fromKey, toKey, dateFrom, dateTo) {
 function closeConfirm() {
   document.getElementById('confirmModal').classList.add('hidden');
   pendingSwap = null;
+  pendingManualMove = null;
 }
 
 function confirmSwap() {
+  // 处理手动移位
+  if (pendingManualMove && !pendingSwap) {
+    const { key, oldDate, targetDate } = pendingManualMove;
+    const parent = findParent(key);
+    parent.originalDate = targetDate;
+    
+    // 如果之前标记缺勤，补勤后自动取消缺勤
+    if (absentParents.has(key)) {
+      absentParents.delete(key);
+      if (unavailableMap[key] === 'ALL') delete unavailableMap[key];
+    }
+    
+    swapHistory.push({
+      from: key,
+      to: '【手动移位】',
+      dateFrom: oldDate,
+      dateTo: targetDate,
+      timestamp: new Date().toLocaleString('zh-CN')
+    });
+    swapCount[key] = (swapCount[key] || 0) + 1;
+    
+    saveState();
+    closeConfirm();
+    renderSchedule();
+    renderHistory();
+    onManualParentSelect();
+    
+    showToast(`✅ 已将 ${parent.student} 移至 ${formatDateShort(targetDate)}`);
+    document.getElementById('scheduleTable').scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
+  
   if (!pendingSwap) return;
   
   const { fromKey, toKey, dateFrom, dateTo } = pendingSwap;
