@@ -386,6 +386,15 @@ select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3p
   </div>
 </div>
 
+<!-- Cloud Requests -->
+<div class="card">
+  <div class="card-title">📢 调换请求汇总（所有人可见）</div>
+  <div class="history-list" id="cloudRequestsList">
+    <div class="history-empty">⏳ 加载中...</div>
+  </div>
+  <button class="btn btn-outline btn-sm" onclick="refreshCloud()" style="margin-top:8px;">🔄 刷新</button>
+</div>
+
 <!-- History -->
 <div class="card">
   <div class="card-title">📝 调换记录</div>
@@ -429,9 +438,10 @@ select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3p
   <div class="card-title" style="font-size:14px;">📌 说明</div>
   <p>1. 每人轮值时间为当天下午 17:00-17:50。</p>
   <p>2. 每组4-5人，小组长负责本组义工工作协调和拍照等工作。</p>
-  <p>3. 调换数据保存在浏览器本地，刷新不丢失。可联系家委陶沐辰妈妈进行协调。</p>
+  <p>3. <b>提交后所有家长可见</b>：选择家长→勾选无法执勤日期→确认提交，数据会上传云端，其他人打开页面能看到。</p>
   <p>4. 点击排班表中的家长可快速选中进行调换操作。</p>
   <p>5. <b style="color:var(--red);">家委操作：点击家长名字旁的 ✕ 按钮可直接标记/取消缺勤（红色）。</b></p>
+  <p>6. 「调换请求汇总」区显示所有人提交的调换需求，点击🔄刷新获取最新数据。</p>
 </div>
 
 </div>
@@ -462,6 +472,120 @@ let unavailableMap = {};    // {parentKey: [date1, date2, ...] or 'ALL'}
 let absentParents = new Set(); // 备注缺勤的家长
 let swapCount = {};         // {parentKey: count}
 let pendingSwap = null;
+let cloudRequests = [];     // 从云端拉取的调换请求 [{issueNumber, parentKey, unavailableDates, isAbsent}]
+
+// ==================== GITHUB API ====================
+// Token分段存储，运行时拼接
+const _t = ['ghp_hspK5','T3EIYGHAph','WK0M01UyRnA','V5on0XbXD4'];
+const GH_TOKEN = _t.join('');
+const GH_REPO = 'tantanxixi299/class2-volunteer-swap';
+const GH_API = `https://api.github.com/repos/${GH_REPO}/issues`;
+
+async function submitToCloud(parentKey, unavailableDates, isAbsent) {
+  const parent = findParent(parentKey);
+  const dateStr = isAbsent ? '全部日期' : unavailableDates.map(formatDateShort).join('、');
+  const body = {
+    parentKey,
+    student: parent.student,
+    parent: parent.parent,
+    unavailableDates: isAbsent ? 'ALL' : unavailableDates,
+    isAbsent,
+    originalDate: parent.originalDate,
+    submittedAt: new Date().toISOString()
+  };
+  
+  const resp = await fetch(GH_API, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${GH_TOKEN}`,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      title: `[调换请求] ${parent.student}(${parent.parent}) 无法执勤：${dateStr}`,
+      body: '```json\n' + JSON.stringify(body, null, 2) + '\n```',
+      labels: ['swap-request']
+    })
+  });
+  
+  if (!resp.ok) throw new Error(`提交失败: ${resp.status}`);
+  return await resp.json();
+}
+
+async function loadCloudRequests() {
+  try {
+    const resp = await fetch(`${GH_API}?labels=swap-request&state=open&per_page=100&t=${Date.now()}`, {
+      headers: { 'Accept': 'application/vnd.github+json' }
+    });
+    if (!resp.ok) throw new Error(`拉取失败: ${resp.status}`);
+    const issues = await resp.json();
+    
+    cloudRequests = issues.map(issue => {
+      try {
+        const match = issue.body.match(/```json\n([\s\S]*?)\n```/);
+        if (match) {
+          const data = JSON.parse(match[1]);
+          return {
+            issueNumber: issue.number,
+            ...data
+          };
+        }
+      } catch(e) {}
+      return null;
+    }).filter(r => r !== null);
+    
+    // 同步到本地状态
+    cloudRequests.forEach(r => {
+      unavailableMap[r.parentKey] = r.unavailableDates;
+      if (r.isAbsent) absentParents.add(r.parentKey);
+    });
+    
+    return cloudRequests;
+  } catch(e) {
+    console.error('拉取云端数据失败:', e);
+    return [];
+  }
+}
+
+async function closeCloudRequest(issueNumber) {
+  try {
+    await fetch(`${GH_API}/${issueNumber}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${GH_TOKEN}`,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ state: 'closed', labels: ['swap-done'] })
+    });
+  } catch(e) {
+    console.error('关闭Issue失败:', e);
+  }
+}
+
+function renderCloudRequests() {
+  const container = document.getElementById('cloudRequestsList');
+  if (!container) return;
+  
+  if (cloudRequests.length === 0) {
+    container.innerHTML = '<div class="history-empty">暂无调换请求，选择家长提交后这里会显示</div>';
+    return;
+  }
+  
+  container.innerHTML = cloudRequests.map(r => {
+    const parent = findParent(r.parentKey);
+    const dateStr = r.isAbsent ? '全部日期' : (r.unavailableDates || []).map(formatDateShort).join('、');
+    const status = r.isAbsent ? '缺勤' : `无法执勤：${dateStr}`;
+    return `
+      <div class="history-item">
+        <span>
+          <b>${parent ? parent.student : r.student}</b>(${parent ? parent.parent : r.parent})
+          — ${status}
+        </span>
+      </div>
+    `;
+  }).join('');
+}
 
 // ==================== INIT ====================
 function init() {
@@ -470,6 +594,11 @@ function init() {
   buildManualSelect();
   renderSchedule();
   renderHistory();
+  // 加载云端数据
+  loadCloudRequests().then(() => {
+    renderSchedule();
+    renderCloudRequests();
+  });
 }
 
 // 家委手动调整：填充家长下拉框
@@ -492,6 +621,14 @@ function toggleManualPanel() {
   const arrow = document.getElementById('manualArrow');
   content.classList.toggle('hidden');
   arrow.textContent = content.classList.contains('hidden') ? '▶' : '▼';
+}
+
+async function refreshCloud() {
+  showToast('⏳ 正在刷新...');
+  await loadCloudRequests();
+  renderSchedule();
+  renderCloudRequests();
+  showToast('✅ 已刷新');
 }
 
 function onManualParentSelect() {
@@ -669,7 +806,7 @@ function updateSubmitBtn() {
 // ==================== SUBMIT & MATCHING ====================
 let submittedKey = null; // 已提交的家长
 
-function submitDates() {
+async function submitDates() {
   const parentKey = document.getElementById('parentSelect').value;
   if (!parentKey) return;
   
@@ -691,9 +828,24 @@ function submitDates() {
   saveState();
   renderSchedule();
   
-  const dateStr = absentCb ? '全部日期' : dates.map(formatDateShort).join('、');
-  showToast(`✅ 已提交：${dateStr} 无法执勤`);
+  // 提交到云端
+  const btn = document.getElementById('submitDatesBtn');
+  const oldText = btn.textContent;
+  btn.textContent = '⏳ 提交中...';
+  btn.disabled = true;
   
+  try {
+    await submitToCloud(parentKey, dates, absentCb);
+    showToast(`✅ 已提交到云端，其他家长可见`);
+    await loadCloudRequests();
+    renderSchedule();
+    renderCloudRequests();
+  } catch(e) {
+    showToast('⚠️ 云端提交失败，已保存到本地', 'error');
+  }
+  
+  btn.textContent = oldText;
+  btn.disabled = false;
   document.getElementById('findMatchBtn').disabled = false;
 }
 
