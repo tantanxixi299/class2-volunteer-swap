@@ -197,6 +197,16 @@ select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3p
   border-radius: 3px;
   margin-left: 2px;
 }
+.makeup-badge {
+  display: inline-block;
+  font-size: 10px;
+  background: #fef3c7;
+  color: #92400e;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 2px;
+  border: 1px solid #fbbf24;
+}
 /* Color markers */
 .swap-1 { color: var(--green) !important; font-weight: 700; }
 .swap-2 { color: var(--yellow) !important; font-weight: 700; }
@@ -842,6 +852,7 @@ function confirmSwap() {
     const { key, oldDate, targetDate } = pendingManualMove;
     const parent = findParent(key);
     parent.originalDate = targetDate;
+    parent.isMakeup = true; // 标记为补勤位
     
     // 如果之前标记缺勤，补勤后自动取消缺勤
     if (absentParents.has(key)) {
@@ -937,9 +948,16 @@ function renderSchedule() {
     }
   }
   
-  // 每个日期内组长排第一
+  // 每个日期内组长排第一，补勤位排最后
   for (const d of SCHEDULE_DATA.allDates) {
-    dateMembers[d].sort((a, b) => (b.isLeader ? 1 : 0) - (a.isLeader ? 1 : 0));
+    dateMembers[d].sort((a, b) => {
+      const aLeader = a.isLeader ? 1 : 0;
+      const bLeader = b.isLeader ? 1 : 0;
+      if (aLeader !== bLeader) return bLeader - aLeader;
+      const aMakeup = a.isMakeup ? 1 : 0;
+      const bMakeup = b.isMakeup ? 1 : 0;
+      return aMakeup - bMakeup;
+    });
   }
   
   let maxRows = 0;
@@ -1005,6 +1023,7 @@ function renderSchedule() {
           <div class="${colorClass}">
             ${m.student}
             ${m.isLeader ? '<span class="leader-badge">组长</span>' : ''}
+            ${m.isMakeup ? '<span class="makeup-badge">补勤</span>' : ''}
             <span class="absent-mark-btn${absentActive}" data-key="${escapeHtml(key)}" title="标记缺勤" onclick="event.stopPropagation();toggleAbsent('${escapeHtml(key)}')">✕</span>
           </div>
           <div class="parent-name ${colorClass}">${m.parent}${m.relation ? '·'+m.relation : ''}</div>
@@ -1110,12 +1129,24 @@ function undoSwap(index) {
   if (index < 0 || index >= swapHistory.length) return;
   
   const h = swapHistory[index];
-  // 反向交换
-  swapParentDates(h.from, h.to);
+  
+  if (h.to === '【手动移位】') {
+    // 手动移位撤销：把家长移回原日期，清除补勤标记
+    const parent = findParent(h.from);
+    if (parent) {
+      parent.originalDate = h.dateFrom;
+      parent.isMakeup = false;
+    }
+  } else {
+    // 普通调换：反向交换
+    swapParentDates(h.from, h.to);
+  }
   
   // 减少计数
   swapCount[h.from] = Math.max(0, (swapCount[h.from] || 1) - 1);
-  swapCount[h.to] = Math.max(0, (swapCount[h.to] || 1) - 1);
+  if (h.to !== '【手动移位】') {
+    swapCount[h.to] = Math.max(0, (swapCount[h.to] || 1) - 1);
+  }
   
   swapHistory.splice(index, 1);
   
