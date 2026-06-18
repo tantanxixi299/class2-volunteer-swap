@@ -508,6 +508,9 @@ function onAbsentToggle() {
   if (checked) {
     const cbs = document.querySelectorAll('#dateCheckboxes input');
     cbs.forEach(cb => { cb.checked = true; cb.parentElement.classList.add('checked'); });
+  } else {
+    // 取消缺勤：重新构建复选框，恢复到只有原始日期被勾选的状态
+    buildDateCheckboxes(parentKey);
   }
   updateSubmitBtn();
 }
