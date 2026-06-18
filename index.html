@@ -463,19 +463,30 @@ function buildDateCheckboxes(parentKey) {
   const unavailable = unavailableMap[parentKey] || [];
   const isAllUnavailable = unavailable === 'ALL';
   
+  // 自动包含家长当前的执勤日期
+  const currentDate = parent ? parent.originalDate : null;
+  const autoDates = new Set(unavailable === 'ALL' ? [] : unavailable);
+  if (currentDate) autoDates.add(currentDate);
+  
   container.innerHTML = '';
   
   SCHEDULE_DATA.allDates.forEach(d => {
     const label = document.createElement('label');
     label.className = 'date-cb';
-    if (isAllUnavailable || unavailable.includes(d)) {
+    const isChecked = isAllUnavailable || autoDates.has(d);
+    if (isChecked) {
       label.classList.add('checked');
+    }
+    // 原定日期用红色边框突出
+    if (d === currentDate && !isAllUnavailable) {
+      label.style.borderColor = 'var(--red)';
+      label.style.background = '#fff5f5';
     }
     
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.value = d;
-    cb.checked = isAllUnavailable || unavailable.includes(d);
+    cb.checked = isChecked;
     cb.addEventListener('change', () => {
       label.classList.toggle('checked', cb.checked);
       updateSubmitBtn();
