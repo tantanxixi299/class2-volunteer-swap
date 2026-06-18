@@ -1040,7 +1040,7 @@ function closeConfirm() {
   pendingManualMove = null;
 }
 
-function confirmSwap() {
+async function confirmSwap() {
   // 处理手动移位
   if (pendingManualMove && !pendingSwap) {
     const { key, oldDate, targetDate, moveType } = pendingManualMove;
@@ -1103,11 +1103,8 @@ function confirmSwap() {
   swapCount[toKey] = (swapCount[toKey] || 0) + 1;
   
   // 关闭云端调换请求
-  cloudRequests.forEach(r => {
-    if (r.parentKey === fromKey || r.parentKey === toKey) {
-      closeCloudRequest(r.issueNumber);
-    }
-  });
+  const toClose = cloudRequests.filter(r => r.parentKey === fromKey || r.parentKey === toKey);
+  await Promise.all(toClose.map(r => closeCloudRequest(r.issueNumber)));
   // 从本地缓存中移除已调换的请求
   cloudRequests = cloudRequests.filter(r => r.parentKey !== fromKey && r.parentKey !== toKey);
   
