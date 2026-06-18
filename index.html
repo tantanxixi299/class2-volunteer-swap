@@ -303,6 +303,13 @@ select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3p
 .modal .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 
 .hidden { display: none !important; }
+
+.manual-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; user-select: none; padding: 2px 0;
+}
+.manual-toggle:hover { opacity: 0.8; }
+.manual-arrow { font-size: 12px; color: var(--text-secondary); }
 </style>
 </head>
 <body>
@@ -369,25 +376,32 @@ select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3p
 </div>
 
 <!-- 家委手动调整 -->
-<div class="card" style="border:2px dashed var(--primary);">
-  <div class="card-title" style="color:var(--red);">🛠️ 家委手动调整（补勤/移位）</div>
-  <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
-    家委专用：将缺勤家长直接移到后面的日期补勤，或做任意手动调整。
-  </p>
-  <div class="form-row">
-    <div class="form-group">
-      <label>选择家长</label>
-      <select id="manualParentSelect" onchange="onManualParentSelect()">
-        <option value="">-- 请选择 --</option>
-      </select>
+<div class="card">
+  <div class="manual-toggle" onclick="toggleManualPanel()" id="manualToggle">
+    <span style="color:var(--red);font-weight:700;">🛠️ 家委手动调整（补勤/移位）</span>
+    <span class="manual-arrow" id="manualArrow">▶</span>
+  </div>
+  <div id="manualContent" class="hidden">
+    <div style="border:2px dashed var(--primary);border-radius:8px;padding:14px;margin-top:10px;">
+      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
+        家委专用：将缺勤家长直接移到后面的日期补勤，或做任意手动调整。
+      </p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>选择家长</label>
+          <select id="manualParentSelect" onchange="onManualParentSelect()">
+            <option value="">-- 请选择 --</option>
+          </select>
+        </div>
+        <div class="form-group" id="manualTargetGroup" style="display:none;">
+          <label>移至日期</label>
+          <select id="manualTargetDate"></select>
+        </div>
+        <button class="btn btn-danger" id="manualMoveBtn" onclick="manualMove()" disabled style="align-self:flex-end;">
+          ➡ 确认移位
+        </button>
+      </div>
     </div>
-    <div class="form-group" id="manualTargetGroup" style="display:none;">
-      <label>移至日期</label>
-      <select id="manualTargetDate"></select>
-    </div>
-    <button class="btn btn-danger" id="manualMoveBtn" onclick="manualMove()" disabled style="align-self:flex-end;">
-      ➡ 确认移位
-    </button>
   </div>
 </div>
 
@@ -471,6 +485,13 @@ function buildManualSelect() {
     opt.textContent = `${p.student}(${p.parent})`;
     sel.appendChild(opt);
   });
+}
+
+function toggleManualPanel() {
+  const content = document.getElementById('manualContent');
+  const arrow = document.getElementById('manualArrow');
+  content.classList.toggle('hidden');
+  arrow.textContent = content.classList.contains('hidden') ? '▶' : '▼';
 }
 
 function onManualParentSelect() {
@@ -874,6 +895,13 @@ function confirmSwap() {
     renderSchedule();
     renderHistory();
     onManualParentSelect();
+    
+    // 自动收起手动调整面板
+    document.getElementById('manualContent').classList.add('hidden');
+    document.getElementById('manualArrow').textContent = '▶';
+    document.getElementById('manualParentSelect').value = '';
+    document.getElementById('manualTargetGroup').style.display = 'none';
+    document.getElementById('manualMoveBtn').disabled = true;
     
     showToast(`✅ 已将 ${parent.student} 移至 ${formatDateShort(targetDate)}`);
     document.getElementById('scheduleTable').scrollIntoView({ behavior: 'smooth' });
