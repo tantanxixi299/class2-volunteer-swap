@@ -1235,7 +1235,7 @@ function renderSchedule() {
             ${m.isMakeup ? '<span class="makeup-badge">补勤</span>' : ''}
             <span class="absent-mark-btn${absentActive}" data-key="${escapeHtml(key)}" title="标记缺勤" onclick="event.stopPropagation();toggleAbsent('${escapeHtml(key)}')">✕</span>
           </div>
-          <div class="parent-name ${colorClass}">${m.parent ? m.parent + (m.relation ? '·'+m.relation : '') : ''}</div>
+          <div class="parent-name ${colorClass}">${m.parent && m.parent.trim() ? m.parent + (m.relation ? '·'+m.relation : '') : ''}</div>
         `;
         td.title = `${m.student}(${m.parent}) - ${formatDateShort(d)} - 点击选择`;
         td.addEventListener('click', () => selectParentFromCell(key));
